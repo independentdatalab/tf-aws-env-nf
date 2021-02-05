@@ -7,7 +7,7 @@ jobs with AWS Batch submitted with Nextflow.
 
 This repository provisions the AWS infrastructure for basic computational 
 biology operations. It creates a small basic instance for a user to login, file 
-downloads and uploads and starting nextflow, and all necessary AWS resources for 
+downloads and uploads and for running nextflow, and all necessary AWS resources for 
 AWS Batch job executions of nextflow processes.
 
 Terraform version: 0.13.4
