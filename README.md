@@ -2,7 +2,8 @@
 
 ## Description
 
-This repository contains infrastructure-as-a-code in Terraform for AWS.
+This repository contains infrastructure-as-a-code in Terraform for executing computational
+jobs with AWS Batch submitted with Nextflow.
 
 This repository provisions the AWS infrastructure for basic computational 
 biology operations. It creates a small basic instance for a user to login, file 
