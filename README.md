@@ -6,9 +6,9 @@ This repository contains infrastructure-as-a-code in Terraform for executing com
 jobs with AWS Batch submitted with Nextflow.
 
 This repository provisions the AWS infrastructure for basic computational 
-biology operations. It creates a small basic instance for a user to login, file 
-downloads and uploads and for running nextflow, and all necessary AWS resources for 
-AWS Batch job executions of nextflow processes.
+biology operations. It creates all necessary AWS resources for 
+AWS Batch job executions of nextflow processes as well as a small basic instance for a user to login, to
+download and upload files and to run nextflow.
 
 Terraform version: 0.13.4
 
@@ -25,11 +25,13 @@ aws configure
 ``` 
   and add your key, secret key, region and output format(json).
 
-*   Create a key-pair in EC2 service `<KEY.PAIR>` 
-(Go to "Services" - "EC2" - "Network and Security" - "Key Pairs")
+*   Login to your AWS console, and create a key-pair in EC2 service `<KEY.PAIR>` 
+(Go to "Services" - "EC2" - "Network and Security" - "Key Pairs"). This key-pair identifies a user,
+so I typically use `f.lastname` as the name. In order to later use `ssh` to login to your 
+instance, download your key-pair and store it locally. 
 
-*   Change the account name, AWS account ID, and region in `terraform.tfvars` 
-*   Change terraform bucket name in `setup-tf-bucket.sh` -  this is where terraform will store the state of your AWS infrastructure.
+*   Modify the file `terraform.tfvars`: Change the account name (choose one - it will be used as an alias to your account), AWS account ID (numeric ID), and region.
+*   In `setup-tf-bucket.sh` modify  terraform bucket name -  this is where terraform will store the state of your AWS infrastructure. The name has to be unique across all AWS buckets.
 *   Change profile and terraform bucket name in `main.tf`
 *   Change the `KEY.PAIR` to yours in `instances.tf` and `compute-env/ami.tf` 
 
@@ -56,45 +58,23 @@ terraform init
 $ terraform plan
 ```
 
+When you do it the first time, you will have some 15 resources that will be added.
+
 2. If the check is consistent with expected changes, apply the changes:
 ```
 $ terraform apply
 ```
 
-
-## Important follow-up steps and considerations
-
-*   Upon first creation of Compute environment, EC2 instance will be created and 
-started. Make sure to login to AWS console, go to EC2 - Instances and Stop the 
-running instance, but do not terminate it! 
-
-*   You might want to fix the ami ID that was used to create the basic instance. 
-See "Created resources:Basic Instance" below
-
-*   For compute environment for Nextflow an AMI with ~1000G root volume is required.
-Such AMI is created by first getting latest public ECS optimized AMI, using 
-this AMI to create EC2 instance `base-batch-ami` with added necessary root volume of 1000G, and 
-then creating AMI `base_batch_nf_ami` based on that instance. This means that there will be an instance 
-created in your AWS with the name "base-batch-ami" which serves merely as an ami.
-You can avoid this by removing `base_batch_nf_ami` from terraform-managed resources,
+That's it. All necessary resources are created and you can now use in your
+nextflow pipelines
 
 ```
-terraform state rm 'aws_ami_from_instance.base_batch_nf_ami'
+process{
+  executor = 'awsbatch'
+}
 ```
 
-then deleting (or commenting) all code in `compute-env/ami.tf`, and in 
-`compute-env/batch.tf` replacing 
-
-```
-image_id = aws_ami_from_instance.base_batch_nf_ami.id 
-```
-with
-
-```
-image_id = "ami-<YOUR_AMI_ID>"
-```
-
-You can find your AMI ID in AWS console in  Services - EC2 - Images - AMIs.
+My typical `aws.config` is provided below.
 
 
 # Created resources:
@@ -250,6 +230,29 @@ with
 ami = "ami-<YOUR_AMI_ID>"
 ```
 
+### Login in to your basic instance
+
+In order to ssh to your instancem you need to have a public DNS of your instance.
+You can get by login in to AWS console, navigating to EC2 service, Instances,
+selecting your instance in the list and pressing "Connect" button - it will pop-up
+a window with connecting instructions. 
+
+Alternatively, you can use aws cli to get the public DNS:
+```
+aws ec2 describe-instances | grep "PublicDnsName"
+```
+
+It should look something like this: ec2-X-X-X-X.region.compute.amazonaws.com.
+
+If you alrready downloaded your `<KEY.PAIR> `, then ssh to your instance:
+
+```
+ssh -i "/path/to/keypair/<KEY.PAIR>" ubuntu@ec2-X-X-X-X.region.compute.amazonaws.com
+```
+
+You will need to install all the necessary tools on your instance, including Nextflow.
+
+
 ### VPC
 
  Your account has a default VPC assigned to it, so this resource isn't actually created,
@@ -286,6 +289,107 @@ You also need to manually create the keys for that user.
 
 
  
+## Important follow-up steps and considerations
 
+*   Upon first creation of Compute environment, EC2 instance will be created and 
+started. Make sure to login to AWS console, go to EC2 - Instances and Stop the 
+running instance, but do not terminate it! 
+
+*   You might want to fix the ami ID that was used to create the basic instance. 
+See "Created resources:Basic Instance" above
+
+*   For compute environment for Nextflow an AMI with ~1000G root volume is required.
+Such AMI is created by first getting latest public ECS optimized AMI, using 
+this AMI to create EC2 instance `base-batch-ami` with added necessary root volume of 1000G, and 
+then creating AMI `base_batch_nf_ami` based on that instance. This means that there will be an instance 
+created in your AWS with the name "base-batch-ami" which serves merely as an ami.
+You can avoid this by removing `base_batch_nf_ami` from terraform-managed resources,
+
+```
+terraform state rm 'aws_ami_from_instance.base_batch_nf_ami'
+```
+
+then deleting (or commenting) all code in `compute-env/ami.tf`, and in 
+`compute-env/batch.tf` replacing 
+
+```
+image_id = aws_ami_from_instance.base_batch_nf_ami.id 
+```
+with
+
+```
+image_id = "ami-<YOUR_AMI_ID>"
+```
+
+You can find your AMI ID in AWS console in  Services - EC2 - Images - AMIs.
+
+
+## My typical aws.config for Nextflow pipelines
+
+For running the pipelines on AWS you will need docker images with the tools required
+by your pipeline. I personally prefer to have one tool per image whenever possible.
+All my images are stored on ECR at the moment, and I am slowly migrating to 
+docker hub. 
+
+So here is my typical aws.config for running nextflow:
+
+`conf/aws.config`
+```
+params {
+  config_profile_name = 'AWSBATCH'
+  config_profile_description = 'AWSBATCH Cloud Profile'
+  config_profile_contact = 'Independent Data Lab'
+  config_profile_url = 'https://aws.amazon.com/de/batch/'
+}
+
+workDir = 's3://nf-work-bucket/nf-ribo'
+
+process{
+  executor = 'awsbatch'
+  // Per-process configuration
+  withName:fastqc {
+      container = '915458310522.dkr.ecr.eu-central-1.amazonaws.com/batch/fastqc'
+      cpus = 2
+      memory = '16GB'
+      queue = 'high_priority'
+    }
+  withName:cutadapt {
+      container = '915458310522.dkr.ecr.eu-central-1.amazonaws.com/batch/cutadapt'
+      cpus = 8
+      memory = '30GB'
+      queue = 'high_priority'
+    }
+
+  ...< AND SO ON >...
+
+  withName:multiqc {
+      container = '915458310522.dkr.ecr.eu-central-1.amazonaws.com/batch/multiqc'
+      cpus = 8
+      memory = '30GB'
+      queue = 'high_priority'
+    }
+}
+
+docker {
+    enabled = true
+}
+
+```
+
+In the nextflow.config you need to add your new profile:
+
+```
+profiles {
+  awsbatch { includeConfig 'conf/aws.config' }
+}
+```
+
+
+
+And I run my pipelines like this:
+
+```
+nextflow run main.nf -profile awsbatch
+```
 
 
