@@ -51,7 +51,14 @@ terraform init
 ```
 
 
-## Apply new changes to infrastructure
+## Apply new changes to infrastructure in 2 steps:
+
+### Step 1: Create initial infrastructure and batch instance
+
+This step will prepare all initial resources that are needed to configure batch.
+Most importantly, it will create AWS EC2 instance that will be used for creation
+of custom nextflow AMI. This instance will have additional storage attached to it, 
+and it will have a miniconda and awscli installed.
 
 1. Check for the changes to be applied
 ```
@@ -65,6 +72,68 @@ When you do it the first time, you will have some 15 resources that will be adde
 $ terraform apply
 ```
 
+### Step 2: Wait! and then create the rest of the infrastructure
+
+Even after terraform finishes creating all the resources above, you need to wait
+for about 15 minutes to make sure that teh instance that you created for 
+AWS Batch finished installing all the scripts. While you are waiting:
+
+1. Open `compute-env/ami.tf` and uncomment the last part by deleting the lines:
+
+```
+/*
+//UNCOMMENT AFTER THE INSTANCE ABOVE CREATED
+```
+
+and 
+
+```
+//UNCOMMENT AFTER THE INSTANCE ABOVE CREATED
+*/
+```
+
+2. Open `compute-env/batch.tf` and uncomment the last part by removing the follwoing lines:
+
+```
+/*
+// UNCOMMENT AFTER THE INSTANCE IN ami.tf CREATED
+```
+
+and
+
+```
+// UNCOMMENT AFTER THE INSTANCE IN ami.tf CREATED
+*/
+```
+
+3. If some 15 minutes have already passed, you can run terraform apply to apply
+new changes. If you want to be 100% sure that the installation was complete,
+you can connect to the instance using ssh. To do so, login to AWS console in
+your browser, select Service -> EC2. In the list of instances find the one called
+`base-batch-ami`, right-click on it and select "Connect". You will find instructions
+there. Once you have ssh-ed into the instance, run:
+
+```
+systemctl status cloud-final.service
+```
+
+If you see:
+```
+ Active: active (exited)
+```
+Then the script is complete. You can also check if the installation is good by running:
+
+```
+$ ./miniconda/bin/aws --version
+aws-cli/1.19.79 Python/3.8.5 Linux/4.14.231-173.361.amzn2.x86_64 botocore/1.20.79
+```
+
+if all is in order, feel free to run 
+
+```
+terraform apply
+```
+
 That's it. All necessary resources are created and you can now use in your
 nextflow pipelines
 
@@ -76,6 +145,7 @@ process{
 
 My typical `aws.config` is provided below.
 
+##
 
 # Created resources:
 

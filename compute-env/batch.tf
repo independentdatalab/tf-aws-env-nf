@@ -19,6 +19,8 @@ resource "aws_security_group" "bioinfo_general" {
   }
 }
 
+/*
+// UNCOMMENT AFTER THE INSTANCE IN ami.tf CREATED
 resource "aws_batch_compute_environment" "bioinfo_general" {
   compute_environment_name = "bioinfo_general"
 
@@ -71,3 +73,5 @@ resource "aws_batch_job_queue" "low_priority" {
   ]
 }
 
+// UNCOMMENT AFTER THE INSTANCE IN ami.tf CREATED
+*/
